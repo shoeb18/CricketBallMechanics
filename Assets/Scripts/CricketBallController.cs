@@ -24,9 +24,10 @@ public class CricketBallController : MonoBehaviour
     private float accuracyModifier = 1f;
     private bool inAir = false;
     private bool hasBounced = false;
+    private bool isBowlingRightSide = true; // Stores the side
+
     private Vector3 lastFrameVelocity; 
-    private TrailRenderer trail; // Auto-detects if you have a trail
-    private bool isBowlingRightSide = true; // Store the side
+    private TrailRenderer trail; 
 
     void Awake()
     {
@@ -36,127 +37,125 @@ public class CricketBallController : MonoBehaviour
         rb.useGravity = false;
         rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
         
-        // Remove friction material to prevent conflicts
         if(GetComponent<Collider>())
             GetComponent<Collider>().material = null; 
     }
 
-    // hard reset
     void HardResetPhysics()
     {
-        // Toggling isKinematic ON and OFF forces Unity to forget 
-        // all previous momentum, rotation, and collision cache.
         rb.isKinematic = true; 
         rb.linearVelocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
         lastFrameVelocity = Vector3.zero;
         rb.isKinematic = false; 
-        
-        rb.WakeUp(); // Force physics engine to pay attention to this object again
+        rb.WakeUp(); 
     }
 
     void FixedUpdate()
     {
         if (!inAir) return;
 
-        // Track velocity for bounce calculation
         lastFrameVelocity = rb.linearVelocity;
 
-        // === SWING LOGIC ===
+        // === SWING LOGIC (AIR ONLY) ===
         if (!hasBounced && ballType == 1) 
         {
             float force = swingStrength * accuracyModifier; 
-            rb.AddForce(Vector3.right * force, ForceMode.Force);
+            
+            // SIDE LOGIC:
+            // Right Side Bowling -> Swing Right to Left (Vector3.left)
+            // Left Side Bowling  -> Swing Left to Right (Vector3.right)
+            Vector3 direction = isBowlingRightSide ? Vector3.left : Vector3.right;
+
+            rb.AddForce(direction * force, ForceMode.Force);
         }
     }
 
     void OnCollisionEnter(Collision collision)
     {
-        // Only bounce on the Pitch
         if (collision.gameObject.CompareTag("Pitch") && !hasBounced)
         {
             HandleCricketBounce();
         }
     }
 
-public void Bowl(Vector3 startPos, Vector3 targetPos, int type, float accuracy, bool isRightSide)
-{
-    HardResetPhysics();
-    
-    transform.position = startPos;
-    transform.rotation = Quaternion.identity;
-    
-    ballType = type;
-    accuracyModifier = accuracy;
-    inAir = true;
-    hasBounced = false;
-    isBowlingRightSide = isRightSide;
-    rb.useGravity = true;
-
-    if(trail) trail.Clear();
-    
-    // 1. Calculate how long the ball will be in the air
-    Vector3 toTarget = targetPos - startPos;
-    Vector3 horizontal = new Vector3(toTarget.x, 0, toTarget.z);
-    float distance = horizontal.magnitude;
-    float time = distance / deliverySpeed;
-
-    // 2. SWING COMPENSATION LOGIC
-    Vector3 finalTarget = targetPos;
-
-    if (ballType == 1) // Swing
+    // UPDATED BOWL FUNCTION WITH SIDE PARAMETER
+    public void Bowl(Vector3 startPos, Vector3 targetPos, int type, float accuracy, bool isRightSide)
     {
-        // F = ma  ->  a = F / m
-        float force = swingStrength * accuracyModifier;
+        HardResetPhysics();
         
-        float mass = rb.mass;
-        float acceleration = force / mass;
-
-        // Displacement = 0.5 * a * t^2
-        float drift = 0.5f * acceleration * (time * time);
-
-        finalTarget.x -= drift; 
-    }
-
-    rb.linearVelocity = CalculateLaunchVelocity(startPos, finalTarget, deliverySpeed);
-}
-
-    void HandleCricketBounce()
-{
-    hasBounced = true;
-
-    Vector3 incomingVelocity = lastFrameVelocity;
-    Vector3 newVelocity = incomingVelocity;
-
-    // 1. Bounce Up
-    newVelocity.y = -newVelocity.y * bounciness;
-
-    // 2. Apply Friction
-    newVelocity.x *= (1f - gripLoss);
-    newVelocity.z *= (1f - gripLoss);
-
-    // 3. TYPE SPECIFIC LOGIC
-    if (ballType == 2) // SPIN
-    {
-        float angle = spinStrength * accuracyModifier; 
+        transform.position = startPos;
+        transform.rotation = Quaternion.identity;
         
-        // If we are on the Left side (Round the wicket for Right Hander), invert the spin
-        if (!isBowlingRightSide) 
+        ballType = type;
+        accuracyModifier = accuracy;
+        inAir = true;
+        hasBounced = false;
+        isBowlingRightSide = isRightSide; // Store side
+        rb.useGravity = true;
+
+        if(trail) trail.Clear();
+
+        //  Time Calculation
+        Vector3 toTarget = targetPos - startPos;
+        Vector3 horizontal = new Vector3(toTarget.x, 0, toTarget.z);
+        float distance = horizontal.magnitude;
+        float time = distance / deliverySpeed;
+
+        //  SWING COMPENSATION LOGIC
+        // We need to aim slightly opposite to the swing so it lands ON the marker.
+        Vector3 finalTarget = targetPos;
+
+        if (ballType == 1) 
         {
-            angle = -angle;
+            float force = swingStrength * accuracyModifier;
+            float mass = rb.mass;
+            float acceleration = force / mass;
+            float drift = 0.5f * acceleration * (time * time);
+
+            // If Bowling Right (Swings Left) -> Aim Right (+ drift)
+            // If Bowling Left (Swings Right) -> Aim Left (- drift)
+            if (isBowlingRightSide)
+                finalTarget.x += drift; 
+            else
+                finalTarget.x -= drift;
         }
 
-        Quaternion turn = Quaternion.Euler(0, angle, 0);
-        newVelocity = turn * newVelocity;
-    }
-    else // SWING
-    {
-        // STRICT REQUIREMENT: Go straight forward after bounce.
-        newVelocity.x = 0f;
+        rb.linearVelocity = CalculateLaunchVelocity(startPos, finalTarget, deliverySpeed);
     }
 
-    rb.linearVelocity = newVelocity;
-}
+    void HandleCricketBounce()
+    {
+        hasBounced = true;
+
+        Vector3 incomingVelocity = lastFrameVelocity;
+        Vector3 newVelocity = incomingVelocity;
+
+        //  Bounce Up
+        newVelocity.y = -newVelocity.y * bounciness;
+
+        //  Apply Friction
+        newVelocity.x *= (1f - gripLoss);
+        newVelocity.z *= (1f - gripLoss);
+
+        // TYPE SPECIFIC LOGIC
+        if (ballType == 2) // SPIN
+        {
+            float angle = spinStrength * accuracyModifier; 
+            // Invert spin direction based on bowling side
+            if (!isBowlingRightSide) angle = -angle;
+            
+            Quaternion turn = Quaternion.Euler(0, angle, 0);
+            newVelocity = turn * newVelocity;
+        }
+        else // SWING (Type 1)
+        { 
+            // By simply reflecting the vector, the ball naturally preserves 
+            // its sideways momentum (Tangent) and continues drifting in that direction.
+        }
+
+        rb.linearVelocity = newVelocity;
+    }
 
     Vector3 CalculateLaunchVelocity(Vector3 start, Vector3 end, float speed)
     {
