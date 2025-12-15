@@ -26,6 +26,7 @@ public class CricketBallController : MonoBehaviour
     private bool hasBounced = false;
     private Vector3 lastFrameVelocity; 
     private TrailRenderer trail; // Auto-detects if you have a trail
+    private bool isBowlingRightSide = true; // Store the side
 
     void Awake()
     {
@@ -38,28 +39,6 @@ public class CricketBallController : MonoBehaviour
         // Remove friction material to prevent conflicts
         if(GetComponent<Collider>())
             GetComponent<Collider>().material = null; 
-    }
-
-    public void Bowl(Vector3 startPos, Vector3 targetPos, int type, float accuracy)
-    {
-        // 1. Perform Hard Reset (Wipes all previous physics data)
-        HardResetPhysics();
-        
-        // 2. Set Position & State
-        transform.position = startPos;
-        transform.rotation = Quaternion.identity; // Reset rotation
-        
-        ballType = type;
-        accuracyModifier = accuracy;
-        inAir = true;
-        hasBounced = false;
-        rb.useGravity = true;
-
-        // 3. Clear Trail (Visuals)
-        if(trail) trail.Clear();
-
-        // 4. Calculate & Apply Velocity
-        rb.linearVelocity = CalculateLaunchVelocity(startPos, targetPos, deliverySpeed);
     }
 
     // hard reset
@@ -100,32 +79,84 @@ public class CricketBallController : MonoBehaviour
         }
     }
 
-    void HandleCricketBounce()
+public void Bowl(Vector3 startPos, Vector3 targetPos, int type, float accuracy, bool isRightSide)
+{
+    HardResetPhysics();
+    
+    transform.position = startPos;
+    transform.rotation = Quaternion.identity;
+    
+    ballType = type;
+    accuracyModifier = accuracy;
+    inAir = true;
+    hasBounced = false;
+    isBowlingRightSide = isRightSide;
+    rb.useGravity = true;
+
+    if(trail) trail.Clear();
+    
+    // 1. Calculate how long the ball will be in the air
+    Vector3 toTarget = targetPos - startPos;
+    Vector3 horizontal = new Vector3(toTarget.x, 0, toTarget.z);
+    float distance = horizontal.magnitude;
+    float time = distance / deliverySpeed;
+
+    // 2. SWING COMPENSATION LOGIC
+    Vector3 finalTarget = targetPos;
+
+    if (ballType == 1) // Swing
     {
-        hasBounced = true;
+        // F = ma  ->  a = F / m
+        float force = swingStrength * accuracyModifier;
+        
+        float mass = rb.mass;
+        float acceleration = force / mass;
 
-        // Retrieve velocity just before impact
-        Vector3 incomingVelocity = lastFrameVelocity;
+        // Displacement = 0.5 * a * t^2
+        float drift = 0.5f * acceleration * (time * time);
 
-        // Manual Bounce Math (Flip Y)
-        Vector3 newVelocity = incomingVelocity;
-        newVelocity.y = -newVelocity.y * bounciness;
+        finalTarget.x -= drift; 
+    }
 
-        // Apply Spin
-        if (ballType == 2) 
+    rb.linearVelocity = CalculateLaunchVelocity(startPos, finalTarget, deliverySpeed);
+}
+
+    void HandleCricketBounce()
+{
+    hasBounced = true;
+
+    Vector3 incomingVelocity = lastFrameVelocity;
+    Vector3 newVelocity = incomingVelocity;
+
+    // 1. Bounce Up
+    newVelocity.y = -newVelocity.y * bounciness;
+
+    // 2. Apply Friction
+    newVelocity.x *= (1f - gripLoss);
+    newVelocity.z *= (1f - gripLoss);
+
+    // 3. TYPE SPECIFIC LOGIC
+    if (ballType == 2) // SPIN
+    {
+        float angle = spinStrength * accuracyModifier; 
+        
+        // If we are on the Left side (Round the wicket for Right Hander), invert the spin
+        if (!isBowlingRightSide) 
         {
-            float angle = spinStrength * accuracyModifier; 
-            Quaternion turn = Quaternion.Euler(0, angle, 0);
-            newVelocity = turn * newVelocity;
+            angle = -angle;
         }
 
-        // Apply Friction
-        newVelocity.x *= (1f - gripLoss);
-        newVelocity.z *= (1f - gripLoss);
-
-        // Apply Final Velocity
-        rb.linearVelocity = newVelocity;
+        Quaternion turn = Quaternion.Euler(0, angle, 0);
+        newVelocity = turn * newVelocity;
     }
+    else // SWING
+    {
+        // STRICT REQUIREMENT: Go straight forward after bounce.
+        newVelocity.x = 0f;
+    }
+
+    rb.linearVelocity = newVelocity;
+}
 
     Vector3 CalculateLaunchVelocity(Vector3 start, Vector3 end, float speed)
     {

@@ -58,7 +58,7 @@ public class BowlingManager : MonoBehaviour
         float accuracy = 1.0f - Mathf.Abs(val - 0.5f); 
 
         // Fire the Ball
-        ballScript.Bowl(bowlerHand.position, markerTransform.position, currentType, accuracy);
+        ballScript.Bowl(bowlerHand.position, markerTransform.position, currentType, accuracy, isRightSide);
 
         // Reset system after 4 seconds for next ball
         Invoke("ResetDelivery", 4f);
