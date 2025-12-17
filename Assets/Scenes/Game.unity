@@ -1780,15 +1780,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6169265394208870256, guid: d10f4a2e1590b474c8752aa1fb4d0f25, type: 3}
       propertyPath: gripLoss
-      value: 0.25
+      value: 0.2
       objectReference: {fileID: 0}
     - target: {fileID: 6169265394208870256, guid: d10f4a2e1590b474c8752aa1fb4d0f25, type: 3}
       propertyPath: bounciness
-      value: 0.7
+      value: 0.65
       objectReference: {fileID: 0}
     - target: {fileID: 6169265394208870256, guid: d10f4a2e1590b474c8752aa1fb4d0f25, type: 3}
       propertyPath: spinStrength
-      value: 15
+      value: 20
       objectReference: {fileID: 0}
     - target: {fileID: 6169265394208870256, guid: d10f4a2e1590b474c8752aa1fb4d0f25, type: 3}
       propertyPath: deliverySpeed
@@ -1796,7 +1796,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6169265394208870256, guid: d10f4a2e1590b474c8752aa1fb4d0f25, type: 3}
       propertyPath: swingStrength
-      value: 15
+      value: 20
       objectReference: {fileID: 0}
     - target: {fileID: 7367535026698102604, guid: d10f4a2e1590b474c8752aa1fb4d0f25, type: 3}
       propertyPath: m_Mass
